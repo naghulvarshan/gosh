@@ -1,4 +1,4 @@
-package types
+package gosh
 
 import (
 	"fmt"
@@ -7,21 +7,13 @@ import (
 	"golang.org/x/term"
 )
 
-type Menu struct {
-	options          []string
-	defaultSelection *int
-	currSelection    *int
-}
-
-func NewMenu(options []string, defaultSelection, currSelection *int) (*Menu, error) {
-	if defaultSelection != nil {
-		if *defaultSelection >= len(options) || *defaultSelection < 0 {
-			return nil, fmt.Errorf("default selection should be between 0 and %d", len(options))
-		}
+func NewMenu(options []Options, color *ColorCodes) (*Menu, error) {
+	if color == nil {
+		color = &Yellow
 	}
 	return &Menu{
-		options:          options,
-		defaultSelection: defaultSelection,
+		options:        options,
+		selectionColor: *color,
 	}, nil
 }
 
@@ -32,7 +24,7 @@ func (m *Menu) GetUserInput() int {
 	}
 	// 2. Ensure terminal state restores when the program exits
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
-	renderMenuSelection(m.options, 0, 0)
+	renderMenuSelection(m.options, 0, 0, m.selectionColor)
 	currSlection := 0
 	opLen := len(m.options)
 	buf := make([]byte, 3)
@@ -44,7 +36,8 @@ func (m *Menu) GetUserInput() int {
 		if n == 1 {
 			switch buf[0] {
 			case 13, 10: // Enter
-				fmt.Printf("\033[%dA", opLen+1)
+				fmt.Printf("\033[%dA", opLen)
+				fmt.Print("\033[J")
 				fmt.Print("\r\nEnter pressed\r\n")
 				return currSlection
 			case 3: // Ctrl+C
@@ -57,11 +50,11 @@ func (m *Menu) GetUserInput() int {
 				if currSlection < 0 {
 					currSlection = currSlection + opLen
 				}
-				renderMenuSelection(m.options, currSlection, opLen)
+				renderMenuSelection(m.options, currSlection, opLen, m.selectionColor)
 
 			case 66:
 				currSlection = (currSlection + 1) % opLen
-				renderMenuSelection(m.options, currSlection, opLen)
+				renderMenuSelection(m.options, currSlection, opLen, m.selectionColor)
 				// case 67:
 				// 	fmt.Print("\r\nRight\r\n")
 				// case 68:
@@ -72,20 +65,19 @@ func (m *Menu) GetUserInput() int {
 	return -1
 }
 
-func (m *Menu) GetSelection(selected int) string {
+func (m *Menu) GetSelection(selected int) Options {
 	return m.options[selected]
 }
 
-func renderMenuSelection(op []string, selected, overWrite int) {
+func renderMenuSelection(op []Options, selected, overWrite int, color ColorCodes) {
 	if overWrite > 0 {
 		fmt.Printf("\033[%dA", overWrite)
 	}
 	for i := range op {
 		if i == selected {
-			fmt.Printf(" \x1b[1;93m> %s\x1b[0m\r\n", op[i])
+			printWithColor(op[i].DisplayName, color)
 		} else {
-			fmt.Printf("   %s\r\n", op[i])
+			fmt.Printf("   %s\r\n", op[i].DisplayName)
 		}
 	}
-
 }
