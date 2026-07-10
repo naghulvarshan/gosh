@@ -1,4 +1,4 @@
-module github.com/naghulvarshan/gosh/types
+module github.com/naghulvarshan/gosh
 
 go 1.26.3
 
