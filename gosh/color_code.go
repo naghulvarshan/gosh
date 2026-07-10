@@ -10,6 +10,6 @@ func unsetColorText() {
 	fmt.Printf("%s", ResetCC)
 }
 
-func printWithColor(text string, cc ColorCodes) {
-	fmt.Printf(" %s> %s%s\r\n", cc, text, ResetCC)
+func printWithColor(text string, cc ColorCodes, sel Selector) {
+	fmt.Printf(" %s%s %s%s\r\n", cc, sel, text, ResetCC)
 }

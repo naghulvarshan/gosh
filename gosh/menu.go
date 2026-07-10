@@ -2,29 +2,55 @@ package gosh
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"golang.org/x/term"
 )
 
-func NewMenu(options []Options, color *ColorCodes) (*Menu, error) {
-	if color == nil {
-		color = &Yellow
-	}
-	return &Menu{
+// NewMenu returns a Menu with given options as the choices displayed
+// Custom behavior like changing selection color, changing select icon can be set using
+// MenuOpts
+func NewMenu(options []Options, opts ...MenuOpts) *Menu {
+	menu := &Menu{
 		options:        options,
-		selectionColor: *color,
-	}, nil
+		selectionColor: Yellow,
+		selector:       GTSelector,
+	}
+	for _, opt := range opts {
+		opt(menu)
+	}
+	return menu
 }
 
+// Overrides the default select color.
+// Select color is the color the text is displayed when that item is the current choice
+func WithSelectColor(cc ColorCodes) MenuOpts {
+	return func(m *Menu) {
+		m.selectionColor = cc
+	}
+}
+
+// Overrides the default selector
+// Selector is the symbol before the item name currently selected
+func WithSelector(sel Selector) MenuOpts {
+	return func(m *Menu) {
+		m.selector = sel
+	}
+}
+
+// GetUserInput displays the menu and waits for the user to choose an option.
+// The user can move between options with up or down arrows, and press Enter to choose.
+// To abort the customer does Ctrl + c.
+// The option index is returned. For aborted action, -1 is returned.
 func (m *Menu) GetUserInput() int {
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
-	// 2. Ensure terminal state restores when the program exits
+	// Ensure terminal state restores when the program exits
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
-	renderMenuSelection(m.options, 0, 0, m.selectionColor)
+	m.renderMenuSelection(0, 0)
 	currSlection := 0
 	opLen := len(m.options)
 	buf := make([]byte, 3)
@@ -50,11 +76,11 @@ func (m *Menu) GetUserInput() int {
 				if currSlection < 0 {
 					currSlection = currSlection + opLen
 				}
-				renderMenuSelection(m.options, currSlection, opLen, m.selectionColor)
+				m.renderMenuSelection(currSlection, opLen)
 
 			case 66:
 				currSlection = (currSlection + 1) % opLen
-				renderMenuSelection(m.options, currSlection, opLen, m.selectionColor)
+				m.renderMenuSelection(currSlection, opLen)
 				// case 67:
 				// 	fmt.Print("\r\nRight\r\n")
 				// case 68:
@@ -66,18 +92,25 @@ func (m *Menu) GetUserInput() int {
 }
 
 func (m *Menu) GetSelection(selected int) Options {
+	if selected < 0 || selected > len(m.options) {
+		log.Fatalf("the selected index %d is out of bounds.", selected)
+	}
 	return m.options[selected]
 }
 
-func renderMenuSelection(op []Options, selected, overWrite int, color ColorCodes) {
+func (m *Menu) renderMenuSelection(selected, overWrite int) {
 	if overWrite > 0 {
 		fmt.Printf("\033[%dA", overWrite)
 	}
-	for i := range op {
+	for i := range m.options {
 		if i == selected {
-			printWithColor(op[i].DisplayName, color)
+			printColor := m.selectionColor
+			if m.options[i].CustomSelectionColor != nil {
+				printColor = *m.options[i].CustomSelectionColor
+			}
+			printWithColor(m.options[i].DisplayName, printColor, m.selector)
 		} else {
-			fmt.Printf("   %s\r\n", op[i].DisplayName)
+			fmt.Printf("   %s\r\n", m.options[i].DisplayName)
 		}
 	}
 }
